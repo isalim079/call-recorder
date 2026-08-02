@@ -1,0 +1,1 @@
+sed -i '' 's/Manifest.permission.READ_PHONE_STATE,/Manifest.permission.READ_PHONE_STATE,\n            Manifest.permission.PROCESS_OUTGOING_CALLS,/g' app/src/main/kotlin/com/callrecorder/app/ui/home/HomeScreen.kt

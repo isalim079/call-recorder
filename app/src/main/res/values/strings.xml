@@ -1,0 +1,191 @@
+<resources>
+    <!-- App identity -->
+    <string name="app_name">Call Recorder</string>
+
+    <!-- ── Navigation labels ────────────────────────────────────────────── -->
+    <string name="nav_home">Home</string>
+    <string name="nav_recordings">Recordings</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- ── Home Screen ──────────────────────────────────────────────────── -->
+    <string name="home_title">Call Recorder</string>
+    <string name="home_today">Today</string>
+    <string name="home_this_week">This Week</string>
+    <string name="home_this_month">This Month</string>
+    <string name="home_total">Total</string>
+    <string name="home_recent_recordings">Recent Recordings</string>
+    <string name="home_favorites">Favorites</string>
+    <string name="home_storage_usage">Storage Usage</string>
+    <string name="home_empty_title">No Recordings Yet</string>
+    <string name="home_empty_subtitle">Recordings will appear here automatically after your first call.</string>
+
+    <!-- ── Recordings Screen ────────────────────────────────────────────── -->
+    <string name="recordings_title">Recordings</string>
+    <string name="recordings_empty_title">No Recordings Found</string>
+    <string name="recordings_empty_subtitle">Make a phone call to start recording automatically.</string>
+    <string name="recordings_sort">Sort</string>
+    <string name="recordings_filter">Filter</string>
+    <string name="recordings_select_all">Select All</string>
+    <string name="recordings_delete_selected">Delete Selected</string>
+    <string name="recordings_share_selected">Share Selected</string>
+    <string name="recordings_export_selected">Export Selected</string>
+    <string name="recordings_deleted">Recording deleted</string>
+    <string name="recordings_undo">Undo</string>
+
+    <!-- ── Sort options ──────────────────────────────────────────────────── -->
+    <string name="sort_newest_first">Newest First</string>
+    <string name="sort_oldest_first">Oldest First</string>
+    <string name="sort_longest_first">Longest First</string>
+    <string name="sort_shortest_first">Shortest First</string>
+    <string name="sort_by_name">By Name</string>
+    <string name="sort_largest_first">Largest File First</string>
+
+    <!-- ── Filter options ───────────────────────────────────────────────── -->
+    <string name="filter_all">All</string>
+    <string name="filter_incoming">Incoming</string>
+    <string name="filter_outgoing">Outgoing</string>
+    <string name="filter_favorites">Favorites</string>
+    <string name="filter_today">Today</string>
+    <string name="filter_this_week">This Week</string>
+    <string name="filter_this_month">This Month</string>
+
+    <!-- ── Player Screen ────────────────────────────────────────────────── -->
+    <string name="player_play">Play</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_skip_forward">Skip 10 seconds forward</string>
+    <string name="player_skip_backward">Skip 10 seconds backward</string>
+    <string name="player_playback_speed">Playback Speed</string>
+    <string name="player_repeat">Repeat</string>
+    <string name="player_share">Share</string>
+    <string name="player_rename">Rename</string>
+    <string name="player_delete">Delete</string>
+    <string name="player_favorite">Add to favorites</string>
+    <string name="player_unfavorite">Remove from favorites</string>
+
+    <!-- ── Search Screen ────────────────────────────────────────────────── -->
+    <string name="search_title">Search</string>
+    <string name="search_hint">Search recordings…</string>
+    <string name="search_empty_title">No Results Found</string>
+    <string name="search_empty_subtitle">Try different search terms or filters.</string>
+    <string name="search_filter_phone">Phone Number</string>
+    <string name="search_filter_contact">Contact Name</string>
+    <string name="search_filter_date">Date</string>
+    <string name="search_filter_duration">Duration</string>
+    <string name="search_filter_favorite">Favorite</string>
+    <string name="search_filter_notes">Notes</string>
+
+    <!-- ── Settings Screen ──────────────────────────────────────────────── -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Follow System</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_dynamic_colors">Material You Colors</string>
+    <string name="settings_recording">Recording</string>
+    <string name="settings_audio_quality">Audio Quality</string>
+    <string name="settings_quality_low">Low (saves space)</string>
+    <string name="settings_quality_medium">Medium (balanced)</string>
+    <string name="settings_quality_high">High (best quality)</string>
+    <string name="settings_recording_folder">Recording Folder</string>
+    <string name="settings_record_unknown">Record Unknown Numbers</string>
+    <string name="settings_record_everyone">Record Everyone</string>
+    <string name="settings_ignored_contacts">Ignored Contacts</string>
+    <string name="settings_auto_delete">Auto Delete Old Recordings</string>
+    <string name="settings_auto_delete_never">Never</string>
+    <string name="settings_auto_delete_30">After 30 days</string>
+    <string name="settings_auto_delete_60">After 60 days</string>
+    <string name="settings_auto_delete_90">After 90 days</string>
+    <string name="settings_security">Security</string>
+    <string name="settings_app_lock">App Lock</string>
+    <string name="settings_app_lock_pin">PIN Lock</string>
+    <string name="settings_app_lock_biometric">Biometric Lock</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_backup">Backup &amp; Restore</string>
+    <string name="settings_backup_folder">Backup Folder</string>
+    <string name="settings_restore_folder">Restore Folder</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version</string>
+
+    <!-- ── Statistics Screen ────────────────────────────────────────────── -->
+    <string name="statistics_title">Statistics</string>
+    <string name="statistics_daily">Daily</string>
+    <string name="statistics_weekly">Weekly</string>
+    <string name="statistics_monthly">Monthly</string>
+    <string name="statistics_total_calls">Total Calls</string>
+    <string name="statistics_incoming">Incoming</string>
+    <string name="statistics_outgoing">Outgoing</string>
+    <string name="statistics_avg_duration">Average Duration</string>
+    <string name="statistics_storage_consumed">Storage Used</string>
+
+    <!-- ── Storage Screen ───────────────────────────────────────────────── -->
+    <string name="storage_title">Storage</string>
+    <string name="storage_usage">Storage Usage</string>
+    <string name="storage_used">Used</string>
+    <string name="storage_free">Free</string>
+    <string name="storage_total">Total</string>
+    <string name="storage_largest">Largest Recordings</string>
+    <string name="storage_oldest">Oldest Recordings</string>
+    <string name="storage_low_warning">Storage is running low. Consider deleting old recordings.</string>
+
+    <!-- ── Recording item ───────────────────────────────────────────────── -->
+    <string name="recording_incoming">Incoming</string>
+    <string name="recording_outgoing">Outgoing</string>
+    <string name="recording_unknown_caller">Unknown Caller</string>
+    <string name="recording_no_notes">No notes</string>
+
+    <!-- ── Foreground service notification ─────────────────────────────── -->
+    <string name="notification_channel_recording">Recording</string>
+    <string name="notification_channel_recording_desc">Shown while a call is being recorded</string>
+    <string name="notification_recording_title">Recording call…</string>
+    <string name="notification_recording_text">Tap to open Call Recorder</string>
+
+    <!-- ── Permissions ──────────────────────────────────────────────────── -->
+    <string name="permission_record_audio_title">Microphone Access</string>
+    <string name="permission_record_audio_msg">Call Recorder needs microphone access to record phone calls.</string>
+    <string name="permission_phone_state_title">Phone Access</string>
+    <string name="permission_phone_state_msg">Call Recorder needs phone access to detect when calls start and end.</string>
+    <string name="permission_contacts_title">Contacts Access</string>
+    <string name="permission_contacts_msg">Call Recorder uses your contacts to show caller names. This is optional.</string>
+    <string name="permission_grant">Grant Permission</string>
+    <string name="permission_denied">Permission Denied</string>
+    <string name="permission_settings">Open Settings</string>
+
+    <!-- ── Common actions ───────────────────────────────────────────────── -->
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_share">Share</string>
+    <string name="action_export">Export</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_close">Close</string>
+    <string name="action_done">Done</string>
+    <string name="action_save">Save</string>
+    <string name="action_back">Back</string>
+
+    <!-- ── Dialog labels ────────────────────────────────────────────────── -->
+    <string name="dialog_rename_title">Rename Recording</string>
+    <string name="dialog_rename_hint">Enter new name</string>
+    <string name="dialog_delete_title">Delete Recording</string>
+    <string name="dialog_delete_message">This recording will be permanently deleted. This cannot be undone.</string>
+    <string name="dialog_delete_batch_message">%1$d recordings will be permanently deleted.</string>
+
+    <!-- ── Error states ──────────────────────────────────────────────────── -->
+    <string name="error_recorder_unavailable">Recorder is not available</string>
+    <string name="error_microphone_busy">Microphone is in use by another app</string>
+    <string name="error_storage_full">Storage is full. Please free up space.</string>
+    <string name="error_permission_denied">Permission denied. Cannot record calls.</string>
+    <string name="error_unknown">Something went wrong. Please try again.</string>
+
+    <!-- ── Content descriptions (accessibility) ────────────────────────── -->
+    <string name="cd_play_pause">Play or pause recording</string>
+    <string name="cd_skip_forward">Skip 10 seconds forward</string>
+    <string name="cd_skip_backward">Go back 10 seconds</string>
+    <string name="cd_favorite">Toggle favorite</string>
+    <string name="cd_contact_photo">Contact photo</string>
+    <string name="cd_call_incoming">Incoming call indicator</string>
+    <string name="cd_call_outgoing">Outgoing call indicator</string>
+    <string name="accessibility_service_description">This service is required for Call Recorder to detect calls and record audio on Android 10+ devices.</string>
+</resources>

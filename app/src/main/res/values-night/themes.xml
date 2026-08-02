@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-mode window theme -->
+    <style name="Theme.CallRecorder" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
+
+    <style name="Theme.CallRecorder.Splash" parent="Theme.CallRecorder">
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
+    </style>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup rules — recordings are local user data; cloud backup disabled.
+    Users should manually export recordings if they want to back them up.
+-->
+<full-backup-content>
+    <!-- Exclude the recordings database — sensitive user data -->
+    <exclude domain="database" path="." />
+    <!-- Exclude all preferences — may contain PIN hash -->
+    <exclude domain="sharedpref" path="." />
+    <!-- Exclude DataStore files -->
+    <exclude domain="file" path="datastore/" />
+</full-backup-content>

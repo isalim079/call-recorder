@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Transparent window background — Compose renders the entire UI.
+        Edge-to-edge is enabled in MainActivity via enableEdgeToEdge().
+    -->
+    <style name="Theme.CallRecorder" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
+
+    <!-- Splash screen theme — shown before MainActivity content renders -->
+    <style name="Theme.CallRecorder.Splash" parent="Theme.CallRecorder">
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
+    </style>
+</resources>
