@@ -40,7 +40,7 @@ class StorageManager @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     companion object {
-        private const val RECORDINGS_DIR = "recordings"
+        private const val RECORDINGS_DIR = "callRecorder"
         private val FILE_DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
     }
 
@@ -66,9 +66,18 @@ class StorageManager @Inject constructor(
 
     /**
      * Get the base recordings directory.
+     *
+     * Uses external app-specific storage (`getExternalFilesDir("callRecorder")`).
+     * This path resolves to: /sdcard/Android/data/com.callrecorder.app/files/callRecorder
+     * - No `WRITE_EXTERNAL_STORAGE` permission required on Android 10+.
+     * - Files survive as long as the app is installed.
+     * - Visible to users via a file manager.
+     * Falls back to internal storage if external is not available.
      */
-    fun getBaseRecordingsDir(): File =
-        File(context.filesDir, RECORDINGS_DIR)
+    fun getBaseRecordingsDir(): File {
+        val externalDir = context.getExternalFilesDir(RECORDINGS_DIR)
+        return externalDir ?: File(context.filesDir, RECORDINGS_DIR)
+    }
 
     /**
      * Get total bytes used by all recordings.

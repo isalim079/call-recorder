@@ -29,14 +29,17 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -401,6 +404,9 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold,
                     color      = MaterialTheme.colorScheme.onBackground,
                 )
+                TextButton(onClick = onSeeAllRecordings) {
+                    Text("See All", style = MaterialTheme.typography.labelMedium)
+                }
             }
             Spacer(Modifier.height(12.dp))
         }
@@ -419,8 +425,8 @@ fun HomeScreen(
                     recording        = recording,
                     onClick          = { onRecordingClick(recording.id) },
                     onFavoriteToggle = { viewModel.toggleFavorite(recording.id) },
-                    onDelete         = { },
-                    onRename         = { },
+                    onDelete         = { viewModel.deleteRecording(recording.id) },
+                    onRename         = { viewModel.showRenameDialog(recording.id, recording.displayName) },
                     onShare          = { },
                     modifier         = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
@@ -445,13 +451,39 @@ fun HomeScreen(
                     recording        = recording,
                     onClick          = { onRecordingClick(recording.id) },
                     onFavoriteToggle = { viewModel.toggleFavorite(recording.id) },
-                    onDelete         = { },
-                    onRename         = { },
+                    onDelete         = { viewModel.deleteRecording(recording.id) },
+                    onRename         = { viewModel.showRenameDialog(recording.id, recording.displayName) },
                     onShare          = { },
                     modifier         = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
         }
+    }
+
+    // ── Rename dialog ────────────────────────────────────────────────────────
+    if (state.showRenameDialog) {
+        var nameText by remember(state.renameInitialName) { mutableStateOf(state.renameInitialName) }
+        AlertDialog(
+            onDismissRequest = viewModel::dismissRenameDialog,
+            title            = { Text("Rename Recording") },
+            text             = {
+                OutlinedTextField(
+                    value         = nameText,
+                    onValueChange = { nameText = it },
+                    label         = { Text("Name") },
+                    singleLine    = true,
+                )
+            },
+            confirmButton    = {
+                TextButton(
+                    onClick = { viewModel.renameRecording(nameText) },
+                    enabled = nameText.isNotBlank(),
+                ) { Text("Save") }
+            },
+            dismissButton    = {
+                TextButton(onClick = viewModel::dismissRenameDialog) { Text("Cancel") }
+            },
+        )
     }
 }
 

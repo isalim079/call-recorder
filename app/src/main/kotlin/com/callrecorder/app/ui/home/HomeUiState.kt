@@ -13,4 +13,8 @@ data class HomeUiState(
     val favoriteRecordings: List<Recording> = emptyList(),
     val totalStorageBytes: Long = 0L,
     val availableStorageBytes: Long = 0L,
+    // Rename dialog
+    val showRenameDialog: Boolean = false,
+    val renameTargetId: Long? = null,
+    val renameInitialName: String = "",
 )

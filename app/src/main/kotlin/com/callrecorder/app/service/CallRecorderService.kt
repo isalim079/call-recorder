@@ -55,6 +55,11 @@ class CallRecorderService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var currentFilePath: String? = null
+    /**
+     * Timestamp set AFTER [recorderEngine.startRecording] succeeds — not before.
+     * This eliminates the gap caused by coroutine scheduling + MediaRecorder init
+     * (typically 3–10 s on busy devices) that previously caused inflated durations.
+     */
     private var recordingStartTime: Long = 0L
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -112,9 +117,8 @@ class CallRecorderService : Service() {
             // Generate file path
             val filePath = storageManager.createRecordingFilePath(phoneNumber, System.currentTimeMillis())
             currentFilePath = filePath
-            recordingStartTime = System.currentTimeMillis()
 
-            // Start foreground service immediately
+            // Start foreground service immediately (required before doing any heavy work)
             startForegroundWithFallback(phoneNumber)
 
             // Start recording
@@ -125,15 +129,19 @@ class CallRecorderService : Service() {
                 cleanup()
                 stopSelf()
             } else {
+                // ✅ Set start time AFTER the engine successfully begins recording.
+                // This avoids inflating the duration by the coroutine dispatch + MediaRecorder
+                // init time (which can be several seconds on slower or busy devices).
+                recordingStartTime = System.currentTimeMillis()
                 wakeLock?.acquire(2 * 60 * 60 * 1000L) // maximum 2 hours lock
-                Timber.d("Recording started: $filePath and WakeLock acquired")
+                Timber.d("Recording started: $filePath — WakeLock acquired at $recordingStartTime")
             }
         }
     }
 
     private fun handleStopRecording(phoneNumber: String) {
         serviceScope.launch {
-            val filePath = currentFilePath
+            val filePath  = currentFilePath
             val startTime = recordingStartTime
 
             if (!recorderEngine.isRecording || filePath == null) {
@@ -144,10 +152,14 @@ class CallRecorderService : Service() {
                 return@launch
             }
 
+            // stopRecording() returns the duration measured by MediaRecorder itself
+            // (System.currentTimeMillis() - recordingStartMs inside the engine).
+            // We use that as the authoritative value; fall back to our own timer only
+            // if the engine call itself fails.
             val durationResult = recorderEngine.stopRecording()
             val durationMs = durationResult.getOrElse {
                 Timber.e(it, "Failed to stop recording properly")
-                System.currentTimeMillis() - startTime
+                if (startTime > 0L) System.currentTimeMillis() - startTime else 0L
             }
 
             // Only save if the file exists and duration > 1 second
@@ -217,6 +229,13 @@ class CallRecorderService : Service() {
 
             val id = insertRecordingUseCase(recording)
             Timber.d("Recording saved to DB with id=$id")
+
+            // ✅ Fix 4 – Show "Call Recorded" notification to the user
+            val displayName = contactName?.takeIf { it.isNotBlank() } ?: phoneNumber
+            notificationHelper.showRecordingSavedNotification(
+                displayName  = displayName,
+                durationSecs = durationMs / 1000L,
+            )
         } catch (e: Exception) {
             Timber.e(e, "Failed to save recording to database")
         }
