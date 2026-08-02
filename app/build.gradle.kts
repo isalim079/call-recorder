@@ -91,6 +91,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
     implementation(project(":core:database"))
+    implementation(project(":core:audio"))
 
     // ── AndroidX Core ─────────────────────────────────────────────────────
     implementation(libs.androidx.core.ktx)

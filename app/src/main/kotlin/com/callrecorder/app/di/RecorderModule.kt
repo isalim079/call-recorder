@@ -1,7 +1,7 @@
 package com.callrecorder.app.di
 
 import com.callrecorder.app.recorder.AudioRecorderEngine
-import com.callrecorder.app.recorder.MediaRecorderEngine
+import com.callrecorder.app.recorder.HdRecorderEngine
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -11,9 +11,7 @@ import dagger.hilt.android.scopes.ServiceScoped
 /**
  * Hilt module providing the audio recorder engine.
  *
- * Scoped to [ServiceComponent] — each [CallRecorderService] instance gets
- * its own [MediaRecorderEngine]. This prevents the engine from being shared
- * between service instances (important for correct MediaRecorder state).
+ * Primary: [HdRecorderEngine] (denoise + skip-ring via [com.callrecorder.core.audio]).
  */
 @Module
 @InstallIn(ServiceComponent::class)
@@ -22,6 +20,6 @@ abstract class RecorderModule {
     @Binds
     @ServiceScoped
     abstract fun bindAudioRecorderEngine(
-        impl: MediaRecorderEngine,
+        impl: HdRecorderEngine,
     ): AudioRecorderEngine
 }

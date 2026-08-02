@@ -35,10 +35,18 @@ class MediaRecorderEngine @Inject constructor(
     override val isRecording: Boolean
         get() = mediaRecorder != null
 
-    override fun startRecording(filePath: String, quality: AudioQuality): Result<Unit> {
+    override fun startRecording(
+        filePath: String,
+        quality: AudioQuality,
+        waitForAnswer: Boolean,
+    ): Result<Unit> {
         if (isRecording) {
             Timber.w("startRecording called while already recording — ignoring")
             return Result.success(Unit)
+        }
+        // MediaRecorder cannot delay until remote answer; waitForAnswer is ignored here.
+        if (waitForAnswer) {
+            Timber.d("MediaRecorder fallback cannot skip ringback (no PCM access)")
         }
 
         return tryWithSource(

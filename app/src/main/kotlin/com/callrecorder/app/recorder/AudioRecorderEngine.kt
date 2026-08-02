@@ -6,7 +6,8 @@ import com.callrecorder.core.domain.model.AudioQuality
  * Contract for the audio recording engine.
  *
  * Implementations:
- * - [MediaRecorderEngine] — uses Android MediaRecorder (production)
+ * - [HdRecorderEngine] — AudioRecord + denoise module + answer detect (primary)
+ * - [MediaRecorderEngine] — classic MediaRecorder (fallback)
  *
  * All methods are synchronous. Call them from a background thread or coroutine.
  */
@@ -17,9 +18,15 @@ interface AudioRecorderEngine {
     /**
      * Start recording to [filePath] with the given [quality].
      *
+     * @param waitForAnswer When true (typical for outgoing), codec only starts after
+     * speech is detected — skips ringback. Incoming answered calls should pass false.
      * @return [Result.success] on success, [Result.failure] with [RecorderError] on failure.
      */
-    fun startRecording(filePath: String, quality: AudioQuality): Result<Unit>
+    fun startRecording(
+        filePath: String,
+        quality: AudioQuality,
+        waitForAnswer: Boolean = false,
+    ): Result<Unit>
 
     /**
      * Stop the current recording and finalize the file.

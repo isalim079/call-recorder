@@ -121,9 +121,11 @@ class CallRecorderService : Service() {
             // Start foreground service immediately (required before doing any heavy work)
             startForegroundWithFallback(phoneNumber)
 
-            // Start recording
+            // Start recording. Outgoing: wait for real speech (skip ringback).
+            // Incoming: OFFHOOK already means answered.
             val quality = getAudioQuality()
-            val result = recorderEngine.startRecording(filePath, quality)
+            val waitForAnswer = direction == CallStateManager.CallDirection.OUTGOING
+            val result = recorderEngine.startRecording(filePath, quality, waitForAnswer = waitForAnswer)
             if (result.isFailure) {
                 Timber.e(result.exceptionOrNull(), "Failed to start recording")
                 cleanup()

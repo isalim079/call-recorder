@@ -15,17 +15,17 @@ enum class AudioQuality(
     val sampleRate: Int,
 ) {
     /**
-     * Low quality — smallest file size, suitable for voice-only recordings.
+     * Low quality — smallest file size, voice bandwidth.
      * ~0.5 MB per minute.
      */
     LOW(
         label      = "Low",
         bitrate    = 64_000,
-        sampleRate = 44_100,
+        sampleRate = 16_000,
     ),
 
     /**
-     * Medium quality — good balance between quality and storage.
+     * Medium quality — clear speech, moderate storage.
      * ~1 MB per minute.
      */
     MEDIUM(
@@ -35,12 +35,12 @@ enum class AudioQuality(
     ),
 
     /**
-     * High quality — best audio fidelity, larger files.
-     * ~2 MB per minute.
+     * High / HD — high-bitrate AAC for clean post-denoise speech.
+     * ~2 MB per minute at 48 kHz mono.
      */
     HIGH(
-        label      = "High",
+        label      = "High (HD)",
         bitrate    = 256_000,
-        sampleRate = 44_100,
+        sampleRate = 48_000,
     ),
 }
