@@ -144,7 +144,10 @@ fun AppScaffold() {
 
             composable(Screen.Storage.route) {
                 StorageScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onRecordingClick = { id ->
+                        navController.navigate(Screen.Player.createRoute(id))
+                    }
                 )
             }
         }

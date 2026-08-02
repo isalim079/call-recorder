@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CleanHands
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -28,11 +29,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +53,7 @@ import com.callrecorder.app.ui.components.RecordingListItem
 @Composable
 fun StorageScreen(
     onBack: () -> Unit,
+    onRecordingClick: (Long) -> Unit = {},
     viewModel: StorageViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -74,44 +81,44 @@ fun StorageScreen(
                 CircularProgressIndicator()
             }
         } else {
-            val totalBytes = state.totalRecordingBytes
+            val totalBytes    = state.totalRecordingBytes
             val availableBytes = state.availableBytes
             val totalBytesSum = (totalBytes + availableBytes).coerceAtLeast(1L)
-            val usedFraction = totalBytes.toFloat() / totalBytesSum.toFloat()
+            val usedFraction  = totalBytes.toFloat() / totalBytesSum.toFloat()
 
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding      = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Storage progress card
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.extraLarge,
-                        colors = CardDefaults.cardColors(
+                        shape    = MaterialTheme.shapes.extraLarge,
+                        colors   = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         )
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.Storage,
+                                    imageVector        = Icons.Default.Storage,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint               = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     "App Recordings Storage",
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style      = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                             Spacer(Modifier.height(16.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier              = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
@@ -127,14 +134,14 @@ fun StorageScreen(
                             }
                             Spacer(Modifier.height(8.dp))
                             LinearProgressIndicator(
-                                progress = { usedFraction.coerceIn(0f, 1f) },
-                                modifier = Modifier
+                                progress  = { usedFraction.coerceIn(0f, 1f) },
+                                modifier  = Modifier
                                     .fillMaxWidth()
                                     .height(10.dp)
                                     .clip(RoundedCornerShape(5.dp)),
-                                color = MaterialTheme.colorScheme.primary,
+                                color      = MaterialTheme.colorScheme.primary,
                                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                strokeCap = StrokeCap.Round
+                                strokeCap  = StrokeCap.Round
                             )
                         }
                     }
@@ -145,7 +152,7 @@ fun StorageScreen(
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
+                            colors   = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
                             ),
                             shape = MaterialTheme.shapes.extraLarge
@@ -153,16 +160,16 @@ fun StorageScreen(
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.DeleteSweep,
+                                        imageVector        = Icons.Default.DeleteSweep,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error
+                                        tint               = MaterialTheme.colorScheme.error
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         "Quick Clean Recommendation",
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style      = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                        color      = MaterialTheme.colorScheme.onErrorContainer
                                     )
                                 }
                                 Spacer(Modifier.height(8.dp))
@@ -194,20 +201,20 @@ fun StorageScreen(
                     item {
                         Text(
                             "Largest Recordings",
-                            style = MaterialTheme.typography.titleMedium,
+                            style      = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp)
+                            modifier   = Modifier.padding(horizontal = 4.dp)
                         )
                     }
                     items(state.largestRecordings, key = { "large_${it.id}" }) { recording ->
                         RecordingListItem(
-                            recording = recording,
-                            onClick = { },
+                            recording        = recording,
+                            onClick          = { onRecordingClick(recording.id) },
                             onFavoriteToggle = { },
-                            onDelete = { viewModel.deleteRecording(recording.id) },
-                            onRename = { },
-                            onShare = { },
-                            modifier = Modifier.fillMaxWidth()
+                            onDelete         = { viewModel.deleteRecording(recording.id) },
+                            onRename         = { viewModel.showRenameDialog(recording.id, recording.displayName) },
+                            onShare          = { },
+                            modifier         = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -217,25 +224,51 @@ fun StorageScreen(
                     item {
                         Text(
                             "Oldest Recordings",
-                            style = MaterialTheme.typography.titleMedium,
+                            style      = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp)
+                            modifier   = Modifier.padding(horizontal = 4.dp)
                         )
                     }
                     items(state.oldestRecordings, key = { "old_${it.id}" }) { recording ->
                         RecordingListItem(
-                            recording = recording,
-                            onClick = { },
+                            recording        = recording,
+                            onClick          = { onRecordingClick(recording.id) },
                             onFavoriteToggle = { },
-                            onDelete = { viewModel.deleteRecording(recording.id) },
-                            onRename = { },
-                            onShare = { },
-                            modifier = Modifier.fillMaxWidth()
+                            onDelete         = { viewModel.deleteRecording(recording.id) },
+                            onRename         = { viewModel.showRenameDialog(recording.id, recording.displayName) },
+                            onShare          = { },
+                            modifier         = Modifier.fillMaxWidth()
                         )
                     }
                 }
             }
         }
+    }
+
+    // ── Rename dialog ──────────────────────────────────────────────────────
+    if (state.showRenameDialog) {
+        var nameText by remember(state.renameInitialName) { mutableStateOf(state.renameInitialName) }
+        AlertDialog(
+            onDismissRequest = viewModel::dismissRenameDialog,
+            title            = { Text("Rename Recording") },
+            text             = {
+                OutlinedTextField(
+                    value         = nameText,
+                    onValueChange = { nameText = it },
+                    label         = { Text("Name") },
+                    singleLine    = true,
+                )
+            },
+            confirmButton    = {
+                TextButton(
+                    onClick = { viewModel.renameRecording(nameText) },
+                    enabled = nameText.isNotBlank(),
+                ) { Text("Save") }
+            },
+            dismissButton    = {
+                TextButton(onClick = viewModel::dismissRenameDialog) { Text("Cancel") }
+            },
+        )
     }
 }
 
@@ -245,6 +278,6 @@ private fun formatBytes(bytes: Long): String {
     return when {
         gb >= 1.0 -> "%.1f GB".format(gb)
         mb >= 1.0 -> "%.0f MB".format(mb)
-        else -> "$bytes B"
+        else      -> "$bytes B"
     }
 }
