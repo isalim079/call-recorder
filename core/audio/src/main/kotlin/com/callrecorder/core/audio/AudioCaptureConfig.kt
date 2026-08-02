@@ -10,17 +10,18 @@ data class AudioCaptureConfig(
     val bitrate: Int,
     val channelCount: Int = 1,
     val fftSize: Int = 512,
-    /** Skip ringback until speech detected (outgoing dialing). */
-    val waitForAnswer: Boolean = true,
-    /** Give up waiting and record anyway after this many ms. */
-    val answerTimeoutMs: Long = 90_000L,
+    /** Soft skip of ringback via VAD (outgoing). Still force-arms after short wait. */
+    val waitForAnswer: Boolean = false,
+    /** Max wait before force-recording (never block whole call). */
+    val answerTimeoutMs: Long = 4_000L,
 ) {
     companion object {
-        fun from(quality: AudioQuality, waitForAnswer: Boolean = true): AudioCaptureConfig =
+        fun from(quality: AudioQuality, waitForAnswer: Boolean = false): AudioCaptureConfig =
             AudioCaptureConfig(
-                sampleRate    = quality.sampleRate,
-                bitrate       = quality.bitrate,
-                waitForAnswer = waitForAnswer,
+                sampleRate      = quality.sampleRate,
+                bitrate         = quality.bitrate,
+                waitForAnswer   = waitForAnswer,
+                answerTimeoutMs = if (waitForAnswer) 4_000L else 300L,
             )
     }
 }

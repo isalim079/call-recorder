@@ -14,15 +14,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
- * HD call capture pipeline:
- * ```
- * mic/call source → AudioRecord
- *   → hardware NS / AEC / AGC (when available)
- *   → learn noise during ring / pre-roll silence
- *   → CallAnswerDetector (skip ringback on outgoing)
- *   → software NoiseReductionPipeline
- *   → AAC LC encode → .m4a
- * ```
+ * HD call capture (PCM) pipeline.
+ *
+ * Prefer [MediaRecorder]-based capture for telephony; use this when PCM is available.
+ *
+ * Encode arms as soon as a short noise profile is learned (or max brief wait for
+ * outgoing answer detect). Never blocks for long — empty call = silent file, not
+ * "nothing saved".
  */
 class HdCallRecorder {
 
@@ -38,6 +36,7 @@ class HdCallRecorder {
 
     @Volatile private var recordStartElapsedMs = 0L
     @Volatile private var encodingArmed = false
+    @Volatile private var actualSampleRate = 44_100
 
     val isRecording: Boolean get() = recording.get()
 
@@ -45,7 +44,7 @@ class HdCallRecorder {
     fun start(
         filePath: String,
         quality: AudioQuality,
-        waitForAnswer: Boolean = true,
+        waitForAnswer: Boolean = false,
     ): Result<Unit> {
         if (!recording.compareAndSet(false, true)) {
             return Result.success(Unit)
@@ -57,30 +56,31 @@ class HdCallRecorder {
         val config = AudioCaptureConfig.from(quality, waitForAnswer)
 
         return try {
-            val record = openAudioRecord(config.sampleRate)
+            val opened = openAudioRecord(preferredRates(config.sampleRate))
                 ?: return failStart(IllegalStateException("No AudioRecord source available"))
 
-            audioRecord = record
-            effects.attach(record)
+            audioRecord = opened.record
+            actualSampleRate = opened.sampleRate
+            effects.attach(opened.record)
 
-            pipeline = NoiseReductionPipeline(config.sampleRate, config.fftSize).also { it.reset() }
+            pipeline = NoiseReductionPipeline(opened.sampleRate, config.fftSize).also { it.reset() }
             answerDetector = CallAnswerDetector().also { it.reset() }
 
-            // Encoder constructed now; start() deferred until arm (after noise profile + answer)
-            encoder = AacMediaEncoder(filePath, config.sampleRate, config.bitrate)
+            // Match encoder to the rate we actually got from the device
+            encoder = AacMediaEncoder(filePath, opened.sampleRate, config.bitrate)
 
-            record.startRecording()
-            if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+            opened.record.startRecording()
+            if (opened.record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                 return failStart(IllegalStateException("AudioRecord failed to enter RECORDING state"))
             }
 
-            val frameSamples = (config.sampleRate * FRAME_MS / 1000).coerceAtLeast(160)
+            val frameSamples = (opened.sampleRate * FRAME_MS / 1000).coerceAtLeast(160)
             captureThread = thread(name = "HdCallCapture", isDaemon = true) {
                 captureLoop(config, frameSamples, waitForAnswer)
             }
 
             Timber.i(
-                "HdCallRecorder started waitForAnswer=$waitForAnswer rate=${config.sampleRate} br=${config.bitrate}"
+                "HdCallRecorder started waitForAnswer=$waitForAnswer rate=${opened.sampleRate} br=${config.bitrate}"
             )
             Result.success(Unit)
         } catch (e: SecurityException) {
@@ -135,8 +135,9 @@ class HdCallRecorder {
         val record = audioRecord ?: return
         val shortBuf = ShortArray(frameSamples)
         val floatBuf = FloatArray(frameSamples)
-        val outShort = ShortArray(frameSamples * 2)
-        val deadlineMs = System.currentTimeMillis() + config.answerTimeoutMs
+        // Soft outgoing skip: never wait longer than a few seconds
+        val maxWaitMs = if (waitForAnswer) FORCE_ARM_OUTGOING_MS else FORCE_ARM_INCOMING_MS
+        val deadlineMs = System.currentTimeMillis() + maxWaitMs
         var frames = 0
 
         try {
@@ -157,15 +158,20 @@ class HdCallRecorder {
                 val aac = encoder
 
                 if (!encodingArmed) {
-                    // Build noise profile during ring / pre-roll silence
                     denoise.learnFrame(frame.copyOf())
 
                     val speech = if (waitForAnswer) detector?.onFrame(frame) == true else false
-                    val timedOut = waitForAnswer && System.currentTimeMillis() >= deadlineMs
+                    val timedOut = System.currentTimeMillis() >= deadlineMs
                     val learnedEnough = denoise.noiseFramesLearned >= MIN_LEARN_FRAMES
-                    val readyIncoming = !waitForAnswer && learnedEnough
+                    // Always arm: speech, or enough learn frames (incoming), or short timeout
+                    val ready = when {
+                        timedOut -> true
+                        !waitForAnswer && learnedEnough -> true
+                        waitForAnswer && learnedEnough && speech -> true
+                        else -> false
+                    }
 
-                    if (readyIncoming || (waitForAnswer && learnedEnough && (speech || timedOut)) || timedOut) {
+                    if (ready) {
                         denoise.lockNoiseProfile()
                         armEncoder(aac)
                         encodingArmed = true
@@ -178,8 +184,9 @@ class HdCallRecorder {
                 }
 
                 val cleaned = denoise.process(frame.copyOf())
-                val n = NoiseReductionPipeline.floatToShorts(cleaned, outShort)
-                aac?.encodePcm(outShort, n)
+                val out = ShortArray(cleaned.size.coerceAtLeast(1))
+                val written = NoiseReductionPipeline.floatToShorts(cleaned, out)
+                aac?.encodePcm(out, written)
             }
         } catch (e: Exception) {
             Timber.e(e, "Capture loop crashed")
@@ -201,8 +208,10 @@ class HdCallRecorder {
         }
     }
 
+    private data class OpenedRecord(val record: AudioRecord, val sampleRate: Int)
+
     @SuppressLint("MissingPermission")
-    private fun openAudioRecord(sampleRate: Int): AudioRecord? {
+    private fun openAudioRecord(sampleRates: IntArray): OpenedRecord? {
         val sources = intArrayOf(
             MediaRecorder.AudioSource.VOICE_RECOGNITION,
             MediaRecorder.AudioSource.VOICE_COMMUNICATION,
@@ -211,33 +220,40 @@ class HdCallRecorder {
             MediaRecorder.AudioSource.CAMCORDER,
             MediaRecorder.AudioSource.DEFAULT,
         )
-        for (source in sources) {
-            try {
-                val minBuf = AudioRecord.getMinBufferSize(
-                    sampleRate,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                )
-                if (minBuf <= 0) continue
-                val bufferSize = minBuf * 4
-                @Suppress("DEPRECATION")
-                val rec = AudioRecord(
-                    source,
-                    sampleRate,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    bufferSize,
-                )
-                if (rec.state == AudioRecord.STATE_INITIALIZED) {
-                    Timber.d("AudioRecord opened source=$source rate=$sampleRate buf=$bufferSize")
-                    return rec
+        for (rate in sampleRates) {
+            for (source in sources) {
+                try {
+                    val minBuf = AudioRecord.getMinBufferSize(
+                        rate,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                    )
+                    if (minBuf <= 0) continue
+                    val bufferSize = minBuf * 4
+                    @Suppress("DEPRECATION")
+                    val rec = AudioRecord(
+                        source,
+                        rate,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        bufferSize,
+                    )
+                    if (rec.state == AudioRecord.STATE_INITIALIZED) {
+                        Timber.d("AudioRecord opened source=$source rate=$rate buf=$bufferSize")
+                        return OpenedRecord(rec, rate)
+                    }
+                    rec.release()
+                } catch (e: Exception) {
+                    Timber.w(e, "AudioRecord source $source @ $rate failed")
                 }
-                rec.release()
-            } catch (e: Exception) {
-                Timber.w(e, "AudioRecord source $source failed")
             }
         }
         return null
+    }
+
+    private fun preferredRates(preferred: Int): IntArray {
+        val common = intArrayOf(preferred, 44_100, 48_000, 16_000, 8_000)
+        return common.distinct().toIntArray()
     }
 
     private fun failStart(e: Exception): Result<Unit> {
@@ -264,7 +280,9 @@ class HdCallRecorder {
 
     companion object {
         private const val FRAME_MS = 20
-        /** ~300 ms at 20 ms frames — enough ambient / ring noise estimate. */
-        private const val MIN_LEARN_FRAMES = 15
+        private const val MIN_LEARN_FRAMES = 10
+        /** Force encode so short calls are never lost if VAD never hears speech. */
+        private const val FORCE_ARM_OUTGOING_MS = 4_000L
+        private const val FORCE_ARM_INCOMING_MS = 300L
     }
 }
