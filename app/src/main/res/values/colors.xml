@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Launcher icon background -->
-    <color name="ic_launcher_background">#0D1117</color>
+    <color name="ic_launcher_background">#021F31</color>
     <!-- Used in XML theme (Compose handles actual UI colors) -->
     <color name="status_bar_color">@android:color/transparent</color>
     <color name="navigation_bar_color">@android:color/transparent</color>
