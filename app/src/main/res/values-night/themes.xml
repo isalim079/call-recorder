@@ -6,7 +6,7 @@
         <item name="android:windowIsTranslucent">false</item>
     </style>
 
-    <style name="Theme.CallRecorder.Splash" parent="Theme.CallRecorder">
-        <item name="android:windowBackground">@color/ic_launcher_background</item>
-    </style>
+    <!-- Theme.CallRecorder.Splash is NOT overridden here intentionally.
+         It inherits from values/themes.xml which uses @drawable/splash_background —
+         the same drawable works correctly in both light and dark modes. -->
 </resources>

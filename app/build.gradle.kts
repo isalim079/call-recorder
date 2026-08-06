@@ -6,19 +6,43 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// ─── Read from app.properties (loaded in root build.gradle.kts) ───────────────
+val appProps = rootProject.extra["appProps"] as java.util.Properties
+
+// Helper: read a required property — fails fast with a clear message
+fun prop(key: String): String =
+    appProps.getProperty(key)
+        ?: error("Missing required key '$key' in app.properties")
+
 android {
     namespace   = "com.callrecorder.app"
     compileSdk  = 35
 
     defaultConfig {
-        applicationId        = "com.callrecorder.app"
-        minSdk               = 26        // Android 8.0 — modern APIs, wide device coverage
-        targetSdk            = 35
-        versionCode          = 1
-        versionName          = "1.0.0"
+        applicationId = prop("app.id")
+        minSdk        = 26        // Android 8.0 — modern APIs, wide device coverage
+        targetSdk     = 35
+        versionCode   = prop("app.version.code").toInt()
+        versionName   = prop("app.version.name")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        // ── Inject brand resources from app.properties ────────────────────────
+        // These replace the hardcoded entries that were in strings.xml / colors.xml.
+        // Gradle generates them into the build/generated/res folder automatically.
+
+        // App name (replaces <string name="app_name"> in strings.xml)
+        resValue("string", "app_name", prop("app.name"))
+
+        // Icon background + splash background (replaces ic_launcher_background in colors.xml)
+        resValue("color", "ic_launcher_background", prop("app.color.dark.bg"))
+
+        // Primary brand color — used by ic_launcher_foreground.xml via @color/app_color_primary
+        resValue("color", "app_color_primary", prop("app.color.primary"))
+
+        // Expose version name to Kotlin code via BuildConfig (in addition to auto-generated field)
+        buildConfigField("String", "APP_VERSION", "\"${prop("app.version.name")}\"")
     }
 
     signingConfigs {
@@ -84,6 +108,7 @@ android {
         baseline = file("lint-baseline.xml")
     }
 }
+
 
 dependencies {
     // ── Core modules ──────────────────────────────────────────────────────

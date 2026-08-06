@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
     lateinit var settingsRepository: SettingsRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_CallRecorder)
         super.onCreate(savedInstanceState)
 
         // Extend content behind status and navigation bars for a premium edge-to-edge feel

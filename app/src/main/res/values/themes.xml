@@ -11,6 +11,6 @@
 
     <!-- Splash screen theme — shown before MainActivity content renders -->
     <style name="Theme.CallRecorder.Splash" parent="Theme.CallRecorder">
-        <item name="android:windowBackground">@color/ic_launcher_background</item>
+        <item name="android:windowBackground">@drawable/splash_background</item>
     </style>
 </resources>

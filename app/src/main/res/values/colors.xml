@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher icon background -->
-    <color name="ic_launcher_background">#021F31</color>
+    <!-- ic_launcher_background and app_color_primary are injected by Gradle from
+         app.properties via resValue. Do NOT declare them here — it would cause
+         a duplicate resource build error. -->
+
     <!-- Used in XML theme (Compose handles actual UI colors) -->
     <color name="status_bar_color">@android:color/transparent</color>
     <color name="navigation_bar_color">@android:color/transparent</color>

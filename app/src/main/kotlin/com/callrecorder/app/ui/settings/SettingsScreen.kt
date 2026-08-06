@@ -40,9 +40,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.callrecorder.app.BuildConfig
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
@@ -142,6 +144,35 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 checked  = state.notificationEnabled,
                 onCheckedChange = viewModel::setNotification,
             )
+        }
+
+        sectionHeader("About")
+        settingItem {
+            // Version is driven by app.version.name in app.properties — no hardcoding needed.
+            Row(
+                modifier          = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector        = Icons.Default.Info,
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.primary,
+                )
+                Column(modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)) {
+                    Text(
+                        text       = "Version",
+                        style      = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text  = BuildConfig.VERSION_NAME,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         item { Spacer(Modifier.height(24.dp)) }

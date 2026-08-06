@@ -1,6 +1,6 @@
 <resources>
-    <!-- App identity -->
-    <string name="app_name">Call Recorder</string>
+    <!-- App identity — app_name is injected by Gradle from app.properties via resValue.
+         Do NOT add <string name="app_name"> here; it would cause a duplicate resource error. -->
 
     <!-- ── Navigation labels ────────────────────────────────────────────── -->
     <string name="nav_home">Home</string>
