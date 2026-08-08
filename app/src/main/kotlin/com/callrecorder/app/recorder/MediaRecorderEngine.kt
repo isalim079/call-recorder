@@ -1,29 +1,23 @@
 package com.callrecorder.app.recorder
 
+import android.content.Context
+import android.media.AudioManager
 import android.media.MediaRecorder
 import android.os.Build
 import com.callrecorder.core.domain.model.AudioQuality
+import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 
 /**
- * Production implementation of [AudioRecorderEngine] using Android [MediaRecorder].
+ * MediaRecorder fallback for telephony capture.
  *
- * Audio source strategy (OEM compatibility):
- * 1. Try [MediaRecorder.AudioSource.VOICE_CALL] — records both sides of the call.
- *    Works on Samsung, some Xiaomi/MIUI, and rooted devices.
- * 2. Fall back to [MediaRecorder.AudioSource.VOICE_COMMUNICATION] — records
- *    the microphone optimised for VoIP (typically only the local side).
- * 3. Last resort: [MediaRecorder.AudioSource.MIC] — unprocessed microphone.
- *
- * Output format: MPEG_4 container (.m4a)
- * Audio codec: AAC
- *
- * This is a stateful, non-thread-safe object. Use it from a single thread/coroutine.
+ * Rules (learned from BCR / AOSP dialer behaviour):
+ * - Prefer [AudioSource.VOICE_CALL] — mixed call audio, no remote announcement
+ * - Never reject VOICE_CALL solely because the first ~300ms are silent (HAL warm-up)
+ * - Only reject pure MIC/DEFAULT if they are silent (useless files)
  */
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
-
 @Suppress("DEPRECATION")
 class MediaRecorderEngine @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -31,6 +25,7 @@ class MediaRecorderEngine @Inject constructor(
 
     private var mediaRecorder: MediaRecorder? = null
     private var recordingStartMs: Long = 0L
+    private var previousMode: Int = AudioManager.MODE_NORMAL
 
     override val isRecording: Boolean
         get() = mediaRecorder != null
@@ -44,23 +39,31 @@ class MediaRecorderEngine @Inject constructor(
             Timber.w("startRecording called while already recording — ignoring")
             return Result.success(Unit)
         }
-        // MediaRecorder cannot delay until remote answer; waitForAnswer is ignored here.
-        if (waitForAnswer) {
-            Timber.d("MediaRecorder fallback cannot skip ringback (no PCM access)")
+
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        previousMode = am.mode
+        try {
+            am.mode = AudioManager.MODE_IN_CALL
+        } catch (e: Exception) {
+            Timber.w(e, "MODE_IN_CALL failed")
         }
 
-        return tryWithSource(
-            filePath  = filePath,
-            quality   = quality,
-            sources   = listOf(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+        val result = tryWithSource(
+            filePath = filePath,
+            quality  = quality,
+            sources  = listOf(
                 MediaRecorder.AudioSource.VOICE_CALL,
                 MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 MediaRecorder.AudioSource.MIC,
                 MediaRecorder.AudioSource.CAMCORDER,
-                MediaRecorder.AudioSource.DEFAULT
-            )
+                MediaRecorder.AudioSource.DEFAULT,
+            ),
         )
+        if (result.isFailure) {
+            restoreMode(am)
+        }
+        return result
     }
 
     override fun stopRecording(): Result<Long> {
@@ -91,75 +94,128 @@ class MediaRecorderEngine @Inject constructor(
         } finally {
             mediaRecorder = null
             recordingStartMs = 0L
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            restoreMode(am)
         }
     }
-
-    // ── Private helpers ────────────────────────────────────────────────────
-
-    @Suppress("DEPRECATION")
-    private fun createMediaRecorder(): MediaRecorder =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)  // API 31+
-        } else {
-            MediaRecorder()
-        }
 
     private fun tryWithSource(
         filePath: String,
         quality: AudioQuality,
         sources: List<Int>,
     ): Result<Unit> {
-        for (source in sources) {
-            val result = attemptStartWithSource(filePath, quality, source)
+        truncateFile(filePath)
+
+        for ((index, source) in sources.withIndex()) {
+            val isLast = index == sources.lastIndex
+            // Never amplitude-kill telephony call mix — silent warm-up is normal
+            val requireAmp = !isLast && !isTelephonyCallSource(source)
+            val result = attemptStartWithSource(filePath, quality, source, requireAmp)
             if (result.isSuccess) {
-                Timber.d("Recording started with audio source: $source")
+                Timber.d("MediaRecorder started source=$source requireAmp=$requireAmp")
                 return result
             }
             Timber.w("Audio source $source failed, trying next...")
+            truncateFile(filePath)
         }
         releaseResources()
         return Result.failure(RecorderError.MicrophoneBusy)
     }
 
+    private fun isTelephonyCallSource(source: Int): Boolean =
+        source == MediaRecorder.AudioSource.VOICE_CALL ||
+            source == MediaRecorder.AudioSource.VOICE_COMMUNICATION ||
+            source == MediaRecorder.AudioSource.VOICE_RECOGNITION
+
     private fun attemptStartWithSource(
         filePath: String,
         quality: AudioQuality,
         audioSource: Int,
+        requireAmplitude: Boolean,
     ): Result<Unit> {
+        var recorder: MediaRecorder? = null
         return try {
-            @Suppress("DEPRECATION")
-            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // The constructor accepting Context is preferred on API 31+
+            recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(context)
             } else {
                 MediaRecorder()
             }
 
+            val sampleRate = safeSampleRate(quality.sampleRate)
+            // HD floor for call capture
+            val bitrate = quality.bitrate.coerceIn(128_000, 320_000)
+
             recorder.apply {
                 setAudioSource(audioSource)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(quality.bitrate)
-                setAudioSamplingRate(quality.sampleRate)
-                setAudioChannels(1)  // Mono — adequate for voice calls
+                setAudioEncodingBitRate(bitrate)
+                setAudioSamplingRate(sampleRate)
+                setAudioChannels(1)
                 setOutputFile(filePath)
                 prepare()
                 start()
+            }
+
+            if (requireAmplitude && !hasAudioSignal(recorder)) {
+                Timber.w("Mic-like source $audioSource silent — skip")
+                safeStopRelease(recorder)
+                return Result.failure(RecorderError.Unknown("Silent mic source $audioSource"))
             }
 
             mediaRecorder = recorder
             recordingStartMs = System.currentTimeMillis()
             Result.success(Unit)
         } catch (e: SecurityException) {
-            Timber.w(e, "SecurityException for audio source $audioSource")
-            mediaRecorder?.let { it.reset(); it.release() }
-            mediaRecorder = null
+            Timber.w(e, "SecurityException source=$audioSource")
+            safeStopRelease(recorder)
             Result.failure(RecorderError.PermissionDenied)
         } catch (e: Exception) {
-            Timber.w(e, "Failed to start recording with source $audioSource")
-            try { mediaRecorder?.let { it.reset(); it.release() } } catch (_: Exception) {}
-            mediaRecorder = null
+            Timber.w(e, "Failed source=$audioSource")
+            safeStopRelease(recorder)
             Result.failure(RecorderError.Unknown(e.message, e))
+        }
+    }
+
+    private fun hasAudioSignal(recorder: MediaRecorder): Boolean {
+        return try {
+            recorder.maxAmplitude
+            var peak = 0
+            repeat(6) {
+                Thread.sleep(40)
+                peak = maxOf(peak, recorder.maxAmplitude)
+                if (peak >= 120) return true
+            }
+            peak >= 120
+        } catch (e: Exception) {
+            true
+        }
+    }
+
+    private fun safeSampleRate(requested: Int): Int {
+        val supported = intArrayOf(8_000, 16_000, 22_050, 32_000, 44_100, 48_000)
+        return if (requested in supported) requested else 44_100
+    }
+
+    private fun safeStopRelease(recorder: MediaRecorder?) {
+        if (recorder == null) return
+        try { recorder.stop() } catch (_: Exception) {}
+        try { recorder.reset() } catch (_: Exception) {}
+        try { recorder.release() } catch (_: Exception) {}
+    }
+
+    private fun truncateFile(path: String) {
+        try {
+            File(path).takeIf { it.exists() }?.delete()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun restoreMode(am: AudioManager) {
+        try {
+            am.mode = previousMode
+        } catch (_: Exception) {
+            try { am.mode = AudioManager.MODE_NORMAL } catch (_: Exception) {}
         }
     }
 }

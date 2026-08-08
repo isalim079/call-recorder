@@ -68,6 +68,111 @@ class ContactsRepository @Inject constructor(
     fun resolveContact(phoneNumber: String): Pair<String?, String?> =
         getContactName(phoneNumber) to getContactPhotoUri(phoneNumber)
 
+    /**
+     * Search contacts by name or number (AOSP Dialer-style filter).
+     * Empty [query] returns first [limit] favorites-ish / alphabetical phones.
+     */
+    fun searchContacts(query: String, limit: Int = 100): List<ContactEntry> {
+        return try {
+            if (query.isBlank()) {
+                listPhones(limit)
+            } else {
+                filterPhones(query.trim(), limit)
+            }
+        } catch (e: SecurityException) {
+            Timber.w("READ_CONTACTS denied for search")
+            emptyList()
+        } catch (e: Exception) {
+            Timber.e(e, "Contact search failed")
+            emptyList()
+        }
+    }
+
+    private fun listPhones(limit: Int): List<ContactEntry> {
+        val projection = arrayOf(
+            ContactsContract.CommonDataKinds.Phone._ID,
+            ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+            ContactsContract.CommonDataKinds.Phone.PHOTO_URI,
+            ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER,
+        )
+        return context.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            projection,
+            null,
+            null,
+            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} COLLATE LOCALIZED ASC",
+        )?.use { c ->
+            val out = ArrayList<ContactEntry>(limit)
+            val seen = HashSet<String>()
+            val idIdx = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+            val nameIdx = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            val numIdx = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            val photoIdx = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.PHOTO_URI)
+            val normIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER)
+            while (c.moveToNext() && out.size < limit) {
+                val number = c.getString(numIdx).orEmpty()
+                val key = number.filter { it.isDigit() || it == '+' }
+                if (key.isBlank() || !seen.add(key)) continue
+                out.add(
+                    ContactEntry(
+                        id = c.getLong(idIdx),
+                        displayName = c.getString(nameIdx).orEmpty().ifBlank { number },
+                        phoneNumber = number,
+                        photoUri = c.getString(photoIdx),
+                        normalizedNumber = if (normIdx >= 0) c.getString(normIdx) else null,
+                    )
+                )
+            }
+            out
+        } ?: emptyList()
+    }
+
+    private fun filterPhones(query: String, limit: Int): List<ContactEntry> {
+        val uri = Uri.withAppendedPath(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI,
+            Uri.encode(query),
+        )
+        val projection = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+            ContactsContract.CommonDataKinds.Phone.PHOTO_URI,
+            ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER,
+        )
+        return context.contentResolver.query(
+            uri,
+            projection,
+            null,
+            null,
+            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} COLLATE LOCALIZED ASC",
+        )?.use { c ->
+            val out = ArrayList<ContactEntry>(limit)
+            val seen = HashSet<String>()
+            val idIdx = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+            val nameIdx = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            val numIdx = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            val photoIdx = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.PHOTO_URI)
+            val normIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER)
+            while (c.moveToNext() && out.size < limit) {
+                val number = c.getString(numIdx).orEmpty()
+                val key = number.filter { it.isDigit() || it == '+' }
+                if (key.isBlank() || !seen.add(key)) continue
+                out.add(
+                    ContactEntry(
+                        id = c.getLong(idIdx),
+                        displayName = c.getString(nameIdx).orEmpty().ifBlank { number },
+                        phoneNumber = number,
+                        photoUri = c.getString(photoIdx),
+                        normalizedNumber = if (normIdx >= 0) c.getString(normIdx) else null,
+                    )
+                )
+            }
+            out
+        } ?: emptyList()
+    }
+
     // ── Private ─────────────────────────────────────────────────────────────
 
     private fun queryContactName(phoneNumber: String): String? {

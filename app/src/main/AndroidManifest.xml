@@ -12,10 +12,15 @@
     <!-- Audio recording — core functionality -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Default dialer / place calls (Telecom full path) -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+
     <!-- Phone state detection — detect incoming/outgoing calls -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 
     <!-- Contact resolution — display names and photos -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -83,9 +88,60 @@
             </intent-filter>
         </activity>
 
+        <!-- ── Phone (ROLE_DIALER: ACTION_DIAL + full dialer shell) ───────── -->
+        <activity
+            android:name=".ui.phone.PhoneActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.CallRecorder"
+            android:windowSoftInputMode="stateHidden|adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tel" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.CALL_BUTTON" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Full-screen in-call UI (answer / hangup / mute / speaker) -->
+        <activity
+            android:name=".ui.phone.InCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.CallRecorder"
+            android:taskAffinity=""
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
+        <!-- ── InCallService (Telecom call lifecycle — OEM-style) ─────────── -->
+        <service
+            android:name=".service.CallInCallService"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data
+                android:name="android.telecom.IN_CALL_SERVICE_UI"
+                android:value="true" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+
         <!-- ── Phone State Receiver ───────────────────────────────────── -->
         <!--
             Listens for PHONE_STATE changes to detect call start/end.
+            Fallback when app is not default dialer.
             READ_PHONE_STATE permission is required by the system.
         -->
         <receiver

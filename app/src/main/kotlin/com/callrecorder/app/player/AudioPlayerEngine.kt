@@ -1,12 +1,14 @@
 package com.callrecorder.app.player
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.MediaPlayer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 
 /**
@@ -45,12 +47,29 @@ class AudioPlayerEngine @Inject constructor(
     fun loadFile(filePath: String, autoPlay: Boolean = false) {
         releasePlayer()
         try {
+            val file = File(filePath)
+            if (!file.exists() || file.length() < 64) {
+                Timber.e("Audio file missing or too small: $filePath size=${file.length()}")
+                _state.value = _state.value.copy(error = "Recording file missing or empty")
+                return
+            }
+
             mediaPlayer = MediaPlayer().apply {
+                // Route to media stream (speaker/headphones), not in-call / silent routes
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                setVolume(1f, 1f)
                 setDataSource(filePath)
                 setOnPreparedListener { mp ->
+                    mp.setVolume(1f, 1f)
                     _state.value = _state.value.copy(
-                        durationMs = mp.duration,
+                        durationMs = mp.duration.coerceAtLeast(0),
                         isReady    = true,
+                        error      = null,
                     )
                     if (autoPlay) {
                         mp.start()
@@ -59,15 +78,16 @@ class AudioPlayerEngine @Inject constructor(
                 }
                 setOnCompletionListener {
                     _state.value = _state.value.copy(
-                        isPlaying        = false,
+                        isPlaying         = false,
                         currentPositionMs = 0,
                     )
                 }
                 setOnErrorListener { _, what, extra ->
-                    Timber.e("MediaPlayer error: what=$what extra=$extra")
+                    Timber.e("MediaPlayer error: what=$what extra=$extra path=$filePath")
                     _state.value = _state.value.copy(
                         isPlaying = false,
-                        error     = "Playback error ($what)"
+                        isReady   = false,
+                        error     = "Playback error ($what)",
                     )
                     true
                 }
@@ -82,8 +102,14 @@ class AudioPlayerEngine @Inject constructor(
     fun play() {
         mediaPlayer?.let { mp ->
             if (!mp.isPlaying) {
-                mp.start()
-                _state.value = _state.value.copy(isPlaying = true)
+                try {
+                    mp.setVolume(1f, 1f)
+                    mp.start()
+                    _state.value = _state.value.copy(isPlaying = true)
+                } catch (e: Exception) {
+                    Timber.e(e, "play() failed")
+                    _state.value = _state.value.copy(error = e.message)
+                }
             }
         }
     }
@@ -102,8 +128,12 @@ class AudioPlayerEngine @Inject constructor(
     }
 
     fun seekTo(positionMs: Int) {
-        mediaPlayer?.seekTo(positionMs)
-        _state.value = _state.value.copy(currentPositionMs = positionMs)
+        try {
+            mediaPlayer?.seekTo(positionMs.coerceAtLeast(0))
+            _state.value = _state.value.copy(currentPositionMs = positionMs.coerceAtLeast(0))
+        } catch (e: Exception) {
+            Timber.w(e, "seekTo failed")
+        }
     }
 
     fun skipForward(ms: Int = 10_000) {
@@ -117,8 +147,13 @@ class AudioPlayerEngine @Inject constructor(
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        mediaPlayer?.playbackParams = mediaPlayer!!.playbackParams.setSpeed(speed)
-        _state.value = _state.value.copy(playbackSpeed = speed)
+        try {
+            val mp = mediaPlayer ?: return
+            mp.playbackParams = mp.playbackParams.setSpeed(speed)
+            _state.value = _state.value.copy(playbackSpeed = speed)
+        } catch (e: Exception) {
+            Timber.w(e, "setPlaybackSpeed failed")
+        }
     }
 
     fun setLooping(looping: Boolean) {
@@ -128,7 +163,9 @@ class AudioPlayerEngine @Inject constructor(
 
     fun getCurrentPosition(): Int = try {
         mediaPlayer?.currentPosition ?: 0
-    } catch (e: Exception) { 0 }
+    } catch (e: Exception) {
+        0
+    }
 
     fun updatePosition() {
         val pos = getCurrentPosition()

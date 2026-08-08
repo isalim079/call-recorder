@@ -1,75 +1,91 @@
 package com.callrecorder.app.recorder
 
-import com.callrecorder.core.audio.HdCallRecorder
+import android.content.Context
+import com.callrecorder.core.audio.capture.VoiceCallCaptureEngine
 import com.callrecorder.core.domain.model.AudioQuality
+import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * Recording engine used by [com.callrecorder.app.service.CallRecorderService].
+ * Production capture orchestration (OEM-style priority):
  *
- * Android often blocks or zeros third-party [android.media.AudioRecord] during
- * telephony, while [MediaRecorder] + VOICE_RECOGNITION still works. So:
- * 1. **Primary:** proven [MediaRecorderEngine] (always records during OFFHOOK)
- * 2. **Optional HD attempt:** only if MediaRecorder fails
+ * 1. [VoiceCallCaptureEngine] — AudioRecord `VOICE_CALL` uplink+downlink when device allows,
+ *    with live AGC for speech volume. Matches BCR / dialer model (no remote announcement).
+ * 2. [MediaRecorderEngine] fallback — `VOICE_CALL` then recognition (still not mic-first).
  *
- * Denoise / answer-detect in [HdCallRecorder] stay available as secondary path
- * when the device actually delivers PCM during a call.
+ * Critical: never prefer plain MIC over call stream when call stream initializes "quiet".
  */
 class HdRecorderEngine @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val mediaRecorder: MediaRecorderEngine,
 ) : AudioRecorderEngine {
 
-    private val hd = HdCallRecorder()
-    @Volatile private var usingHd = false
+    private val voiceCall = VoiceCallCaptureEngine(context)
+    @Volatile private var mode = Mode.NONE
+
+    private enum class Mode { NONE, VOICE_CALL_PCM, MEDIA_RECORDER }
 
     override val isRecording: Boolean
-        get() = if (usingHd) hd.isRecording else mediaRecorder.isRecording
+        get() = when (mode) {
+            Mode.VOICE_CALL_PCM -> voiceCall.isRecording
+            Mode.MEDIA_RECORDER -> mediaRecorder.isRecording
+            Mode.NONE -> false
+        }
 
     override fun startRecording(
         filePath: String,
         quality: AudioQuality,
         waitForAnswer: Boolean,
     ): Result<Unit> {
-        usingHd = false
+        mode = Mode.NONE
 
-        // Always prefer MediaRecorder — that is what worked before the HD rewrite.
-        val mediaResult = mediaRecorder.startRecording(filePath, quality, waitForAnswer)
-        if (mediaResult.isSuccess) {
-            Timber.i("Recording via MediaRecorder (reliable call path)")
-            return mediaResult
+        // 1) True call-audio path with AGC (preferred)
+        val pcm = voiceCall.start(filePath, quality, applyLiveDenoise = true)
+        if (pcm.isSuccess) {
+            mode = Mode.VOICE_CALL_PCM
+            Timber.i(
+                "Recording via VoiceCallCaptureEngine source=${voiceCall.activeAudioSource} " +
+                    "(VOICE_CALL=${android.media.MediaRecorder.AudioSource.VOICE_CALL})"
+            )
+            return pcm
+        }
+        Timber.w(pcm.exceptionOrNull(), "VoiceCall PCM path failed — MediaRecorder VOICE_CALL chain")
+
+        // 2) MediaRecorder with VOICE_CALL first, no silent-reject on call sources
+        val media = mediaRecorder.startRecording(filePath, quality, waitForAnswer)
+        if (media.isSuccess) {
+            mode = Mode.MEDIA_RECORDER
+            Timber.i("Recording via MediaRecorder call chain")
+            return media
         }
 
-        Timber.w(mediaResult.exceptionOrNull(), "MediaRecorder failed — trying HD PCM path")
-        usingHd = true
-        // Force encode soon even on outgoing (do not sit silent for whole call)
-        return hd.start(filePath, quality, waitForAnswer = false)
-            .onFailure { Timber.e(it, "HD PCM path also failed") }
-            .onSuccess { Timber.i("Recording via HdCallRecorder (PCM path)") }
+        Timber.e(media.exceptionOrNull(), "All capture paths failed")
+        return media
     }
 
     override fun stopRecording(): Result<Long> {
-        return if (usingHd) {
-            hd.stop().fold(
+        val result = when (mode) {
+            Mode.VOICE_CALL_PCM -> voiceCall.stop().fold(
                 onSuccess = { Result.success(it) },
-                onFailure = {
-                    Result.failure(RecorderError.Unknown(it.message, it))
-                },
+                onFailure = { Result.failure(RecorderError.Unknown(it.message, it)) },
             )
-        } else {
-            mediaRecorder.stopRecording()
-        }.also { usingHd = false }
+            Mode.MEDIA_RECORDER -> mediaRecorder.stopRecording()
+            Mode.NONE -> Result.failure(RecorderError.InvalidState("No active recording"))
+        }
+        mode = Mode.NONE
+        return result
     }
 
     override fun releaseResources() {
         try {
-            hd.release()
+            voiceCall.release()
         } catch (_: Exception) {
         }
         try {
             mediaRecorder.releaseResources()
         } catch (_: Exception) {
         }
-        usingHd = false
+        mode = Mode.NONE
     }
 }

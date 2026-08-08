@@ -38,6 +38,7 @@ class SettingsRepository @Inject constructor(
         val THEME                = stringPreferencesKey("theme")
         val DYNAMIC_COLORS       = booleanPreferencesKey("dynamic_colors")
         val AUDIO_QUALITY        = stringPreferencesKey("audio_quality")
+        val NOISE_CANCELLATION   = booleanPreferencesKey("noise_cancellation")
         val RECORDING_FOLDER     = stringPreferencesKey("recording_folder")
         val RECORD_UNKNOWN       = booleanPreferencesKey("record_unknown")
         val RECORD_EVERYONE      = booleanPreferencesKey("record_everyone")
@@ -55,7 +56,9 @@ class SettingsRepository @Inject constructor(
     object Defaults {
         const val THEME          = "SYSTEM"
         const val DYNAMIC_COLORS = true
-        const val AUDIO_QUALITY  = "MEDIUM"
+        /** Default HD quality + post-call denoise path. */
+        const val AUDIO_QUALITY  = "HIGH"
+        const val NOISE_CANCELLATION = true
         const val RECORD_UNKNOWN = true
         const val RECORD_EVERYONE = true
         const val AUTO_DELETE_DAYS = 0      // 0 = never
@@ -74,6 +77,9 @@ class SettingsRepository @Inject constructor(
 
     fun getAudioQuality(): Flow<String> =
         dataStore.data.map { it[Keys.AUDIO_QUALITY] ?: Defaults.AUDIO_QUALITY }
+
+    fun getNoiseCancellation(): Flow<Boolean> =
+        dataStore.data.map { it[Keys.NOISE_CANCELLATION] ?: Defaults.NOISE_CANCELLATION }
 
     fun getRecordingFolder(): Flow<String?> =
         dataStore.data.map { it[Keys.RECORDING_FOLDER] }
@@ -109,6 +115,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setAudioQuality(quality: String) =
         dataStore.edit { it[Keys.AUDIO_QUALITY] = quality }
+
+    suspend fun setNoiseCancellation(enabled: Boolean) =
+        dataStore.edit { it[Keys.NOISE_CANCELLATION] = enabled }
 
     suspend fun setRecordingFolder(path: String?) =
         dataStore.edit {

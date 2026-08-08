@@ -66,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.callrecorder.app.util.AccessibilityUtil
+import com.callrecorder.app.util.DialerRoleUtil
 
 import android.Manifest
 import android.content.Context
@@ -81,6 +82,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Phone
 
 @Composable
 fun HomeScreen(
@@ -101,7 +103,8 @@ fun HomeScreen(
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.PROCESS_OUTGOING_CALLS,
             Manifest.permission.READ_CALL_LOG,
-            Manifest.permission.READ_CONTACTS
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.CALL_PHONE,
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             list.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -128,9 +131,22 @@ fun HomeScreen(
     var isAccessibilityEnabled by remember {
         mutableStateOf(AccessibilityUtil.isAccessibilityServiceEnabled(context))
     }
+    var isDefaultDialer by remember {
+        mutableStateOf(DialerRoleUtil.isDefaultDialer(context))
+    }
+
+    val dialerRoleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        isDefaultDialer = DialerRoleUtil.isDefaultDialer(context)
+    }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         isAccessibilityEnabled = AccessibilityUtil.isAccessibilityServiceEnabled(context)
+        isDefaultDialer = DialerRoleUtil.isDefaultDialer(context)
+        missingPermissions = requiredPermissions.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
     }
 
     LazyColumn(
@@ -223,6 +239,53 @@ fun HomeScreen(
                             shape = MaterialTheme.shapes.medium
                         ) {
                             Text("Grant Permissions", color = MaterialTheme.colorScheme.onError)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Default Dialer — production VOICE_CALL path ───────────────────
+        if (!isDefaultDialer && missingPermissions.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                    ),
+                    shape = MaterialTheme.shapes.extraLarge
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Phone,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Set as Default Phone App",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Required for real call-stream capture (both sides, full volume) like OEM dialer recorders — without playing a recording announcement to the other party. You can switch back anytime in system settings.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                val intent = DialerRoleUtil.createRequestIntent(context)
+                                if (intent != null) dialerRoleLauncher.launch(intent)
+                            },
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Text("Set Default Phone App")
                         }
                     }
                 }

@@ -14,7 +14,8 @@ import javax.inject.Inject
 data class SettingsUiState(
     val theme: String = "SYSTEM",
     val dynamicColors: Boolean = true,
-    val audioQuality: String = "MEDIUM",
+    val audioQuality: String = "HIGH",
+    val noiseCancellation: Boolean = true,
     val recordUnknown: Boolean = true,
     val recordEveryone: Boolean = true,
     val autoDeleteDays: Int = 0,
@@ -27,25 +28,37 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
-    val uiState: StateFlow<SettingsUiState> = combine(
-        settingsRepository.getTheme(),
-        settingsRepository.getDynamicColors(),
+    // Nested combine — kotlinx only has typed overloads through 5 flows.
+    private val recordingPrefs = combine(
         settingsRepository.getAudioQuality(),
+        settingsRepository.getNoiseCancellation(),
         settingsRepository.getRecordUnknown(),
         settingsRepository.getRecordEveryone(),
         settingsRepository.getAutoDeleteDays(),
+    ) { quality, noise, unknown, everyone, days ->
+        RecordingPrefs(quality, noise, unknown, everyone, days)
+    }
+
+    private val otherPrefs = combine(
+        settingsRepository.getTheme(),
+        settingsRepository.getDynamicColors(),
         settingsRepository.getAppLockEnabled(),
         settingsRepository.getNotificationEnabled(),
-    ) { arr ->
+    ) { theme, dynamic, lock, notif ->
+        OtherPrefs(theme, dynamic, lock, notif)
+    }
+
+    val uiState: StateFlow<SettingsUiState> = combine(recordingPrefs, otherPrefs) { rec, other ->
         SettingsUiState(
-            theme               = arr[0] as String,
-            dynamicColors       = arr[1] as Boolean,
-            audioQuality        = arr[2] as String,
-            recordUnknown       = arr[3] as Boolean,
-            recordEveryone      = arr[4] as Boolean,
-            autoDeleteDays      = arr[5] as Int,
-            appLockEnabled      = arr[6] as Boolean,
-            notificationEnabled = arr[7] as Boolean,
+            theme               = other.theme,
+            dynamicColors       = other.dynamicColors,
+            audioQuality        = rec.audioQuality,
+            noiseCancellation   = rec.noiseCancellation,
+            recordUnknown       = rec.recordUnknown,
+            recordEveryone      = rec.recordEveryone,
+            autoDeleteDays      = rec.autoDeleteDays,
+            appLockEnabled      = other.appLockEnabled,
+            notificationEnabled = other.notificationEnabled,
         )
     }.stateIn(
         scope        = viewModelScope,
@@ -53,12 +66,45 @@ class SettingsViewModel @Inject constructor(
         initialValue = SettingsUiState(),
     )
 
-    fun setTheme(theme: String)            = viewModelScope.launch { settingsRepository.setTheme(theme) }
-    fun setDynamicColors(enabled: Boolean) = viewModelScope.launch { settingsRepository.setDynamicColors(enabled) }
-    fun setAudioQuality(q: String)         = viewModelScope.launch { settingsRepository.setAudioQuality(q) }
-    fun setRecordUnknown(v: Boolean)       = viewModelScope.launch { settingsRepository.setRecordUnknown(v) }
-    fun setRecordEveryone(v: Boolean)      = viewModelScope.launch { settingsRepository.setRecordEveryone(v) }
-    fun setAutoDeleteDays(days: Int)       = viewModelScope.launch { settingsRepository.setAutoDeleteDays(days) }
-    fun setAppLock(enabled: Boolean)       = viewModelScope.launch { settingsRepository.setAppLockEnabled(enabled) }
-    fun setNotification(enabled: Boolean)  = viewModelScope.launch { settingsRepository.setNotificationEnabled(enabled) }
+    fun setTheme(theme: String) =
+        viewModelScope.launch { settingsRepository.setTheme(theme) }
+
+    fun setDynamicColors(enabled: Boolean) =
+        viewModelScope.launch { settingsRepository.setDynamicColors(enabled) }
+
+    fun setAudioQuality(q: String) =
+        viewModelScope.launch { settingsRepository.setAudioQuality(q) }
+
+    fun setNoiseCancellation(enabled: Boolean) =
+        viewModelScope.launch { settingsRepository.setNoiseCancellation(enabled) }
+
+    fun setRecordUnknown(v: Boolean) =
+        viewModelScope.launch { settingsRepository.setRecordUnknown(v) }
+
+    fun setRecordEveryone(v: Boolean) =
+        viewModelScope.launch { settingsRepository.setRecordEveryone(v) }
+
+    fun setAutoDeleteDays(days: Int) =
+        viewModelScope.launch { settingsRepository.setAutoDeleteDays(days) }
+
+    fun setAppLock(enabled: Boolean) =
+        viewModelScope.launch { settingsRepository.setAppLockEnabled(enabled) }
+
+    fun setNotification(enabled: Boolean) =
+        viewModelScope.launch { settingsRepository.setNotificationEnabled(enabled) }
+
+    private data class RecordingPrefs(
+        val audioQuality: String,
+        val noiseCancellation: Boolean,
+        val recordUnknown: Boolean,
+        val recordEveryone: Boolean,
+        val autoDeleteDays: Int,
+    )
+
+    private data class OtherPrefs(
+        val theme: String,
+        val dynamicColors: Boolean,
+        val appLockEnabled: Boolean,
+        val notificationEnabled: Boolean,
+    )
 }

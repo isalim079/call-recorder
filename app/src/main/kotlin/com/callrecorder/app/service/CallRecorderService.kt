@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import com.callrecorder.app.recorder.AudioRecorderEngine
 import com.callrecorder.app.recorder.RecorderError
+import com.callrecorder.core.audio.enhance.CallAudioEnhancer
 import com.callrecorder.core.data.contacts.ContactsRepository
 import com.callrecorder.core.data.preferences.SettingsRepository
 import com.callrecorder.core.data.storage.StorageManager
@@ -24,6 +25,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
@@ -81,6 +83,10 @@ class CallRecorderService : Service() {
 
         when (action) {
             ACTION_START_RECORDING -> {
+                if (recorderEngine.isRecording) {
+                    Timber.w("Start ignored — already recording (InCall + PHONE_STATE race)")
+                    return START_NOT_STICKY
+                }
                 val directionName = intent.getStringExtra(EXTRA_CALL_DIRECTION) ?: CallStateManager.CallDirection.UNKNOWN.name
                 val direction = try {
                     CallStateManager.CallDirection.valueOf(directionName)
@@ -121,10 +127,11 @@ class CallRecorderService : Service() {
             // Start foreground service immediately (required before doing any heavy work)
             startForegroundWithFallback(phoneNumber)
 
-            // Start recording. Outgoing: wait for real speech (skip ringback).
-            // Incoming: OFFHOOK already means answered.
+            // Start recording. Prefer connected (ACTIVE via InCallService).
+            // PHONE_STATE path still uses OFFHOOK — waitForAnswer soft skip for outgoing only.
             val quality = getAudioQuality()
             val waitForAnswer = direction == CallStateManager.CallDirection.OUTGOING
+            // Audio mode already set inside engines; ensure foreground first (VOIP/call path).
             val result = recorderEngine.startRecording(filePath, quality, waitForAnswer = waitForAnswer)
             if (result.isFailure) {
                 Timber.e(result.exceptionOrNull(), "Failed to start recording")
@@ -159,7 +166,7 @@ class CallRecorderService : Service() {
             // We use that as the authoritative value; fall back to our own timer only
             // if the engine call itself fails.
             val durationResult = recorderEngine.stopRecording()
-            val durationMs = durationResult.getOrElse {
+            var durationMs = durationResult.getOrElse {
                 Timber.e(it, "Failed to stop recording properly")
                 if (startTime > 0L) System.currentTimeMillis() - startTime else 0L
             }
@@ -167,12 +174,35 @@ class CallRecorderService : Service() {
             // Only save if the file exists and duration > 1 second
             val file = File(filePath)
             if (file.exists() && durationMs > 1_000) {
+                // Production HD path: denoise + re-encode after capture (never blocks live call).
+                // Capture path stays MediaRecorder — still reliable on telephony.
+                val quality = getAudioQuality()
+                val noiseOn = settingsRepository.getNoiseCancellation().first()
+                if (noiseOn) {
+                    val enhanced = withContext(Dispatchers.Default) {
+                        runCatching {
+                            CallAudioEnhancer().enhanceInPlace(filePath, quality)
+                        }.onFailure {
+                            Timber.e(it, "CallAudioEnhancer crashed — raw capture kept")
+                        }.getOrNull()
+                    }
+                    if (enhanced != null && enhanced.enhanced && enhanced.durationMs > 0L) {
+                        durationMs = enhanced.durationMs
+                        Timber.i("Post-call HD denoise applied (${durationMs}ms)")
+                    } else {
+                        Timber.w("Post-call enhance skipped — saving raw capture")
+                    }
+                } else {
+                    Timber.d("Noise cancellation off — saving raw capture")
+                }
+
+                val outFile = File(filePath)
                 saveRecording(
                     filePath    = filePath,
                     phoneNumber = phoneNumber,
                     durationMs  = durationMs,
                     startTime   = startTime,
-                    fileSize    = file.length(),
+                    fileSize    = outFile.length(),
                     direction   = callStateManager.getCurrentDirection(),
                 )
             } else {
@@ -248,7 +278,7 @@ class CallRecorderService : Service() {
             val qualityName = settingsRepository.getAudioQuality().first()
             AudioQuality.valueOf(qualityName)
         } catch (e: Exception) {
-            AudioQuality.MEDIUM
+            AudioQuality.HIGH
         }
     }
 

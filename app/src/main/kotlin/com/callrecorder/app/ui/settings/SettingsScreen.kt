@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PhoneCallback
+import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -82,10 +83,25 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 icon    = Icons.Default.GraphicEq,
                 title   = "Audio Quality",
                 current = when (state.audioQuality) {
-                    "LOW" -> "Low (~0.5 MB/min)"; "HIGH" -> "High (~2 MB/min)"; else -> "Medium (~1 MB/min)"
+                    "LOW" -> "Low (~0.7 MB/min)"
+                    "MEDIUM" -> "Medium (~1.2 MB/min)"
+                    else -> "High HD (~2 MB/min) — default"
                 },
-                options = listOf("LOW" to "Low", "MEDIUM" to "Medium", "HIGH" to "High"),
+                options = listOf(
+                    "LOW" to "Low",
+                    "MEDIUM" to "Medium",
+                    "HIGH" to "High (HD)",
+                ),
                 onSelect = viewModel::setAudioQuality,
+            )
+        }
+        settingItem {
+            SwitchSetting(
+                icon    = Icons.Default.Hearing,
+                title   = "Noise Cancellation",
+                subtitle = "Remove hiss, ambient noise & level speech after each call (Wiener HD)",
+                checked  = state.noiseCancellation,
+                onCheckedChange = viewModel::setNoiseCancellation,
             )
         }
         settingItem {
